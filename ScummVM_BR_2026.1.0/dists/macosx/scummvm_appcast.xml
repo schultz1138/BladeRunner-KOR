@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle"  xmlns:dc="http://purl.org/dc/elements/1.1/">
+	<channel>
+		<title>ScummVM Changelog</title>
+		<link>https://www.scummvm.org/appcasts/macosx/release.xml</link>
+		<description>Most recent changes with links to updates.</description>
+		<language>en</language>
+		<item>
+			<title>Version 2.9.1</title>
+			<sparkle:releaseNotesLink>
+				https://www.scummvm.org/frs/scummvm/2.9.1/ReleaseNotes.html
+			</sparkle:releaseNotesLink>
+			<pubDate>Sun, 25 May 2025 18:00:00 +0000</pubDate>
+			<enclosure url="https://downloads.scummvm.org/frs/scummvm/2.9.1/scummvm-2.9.1-macosx.dmg"
+						sparkle:version="2.9.1" length="145300131" type="application/octet-stream"
+						sparkle:edSignature="KyX1EJhmu+w6trOlEt3ERZgrc8jX7hhMc5QrCpfrTqUuyKluYUtyIjz4wRxG0UBRLp7dwQmbMEazdl/S3mrUBg=="
+						sparkle:dsaSignature="MCwCFEKzRhLf8JzY0JHx/rA+WEjBHzYOAhRkJ1lU5ZJrjszLRvaNnl4fh2Memg=="/>
+
+			<enclosure sparkle:os="windows"
+						url="https://downloads.scummvm.org/frs/scummvm/2.9.1/scummvm-2.9.1-win32.exe"
+						sparkle:version="2.9.1" length="124457283" type="application/octet-stream"
+						sparkle:dsaSignature="MCwCFCkaGFjyDKcre4CIZQ90hW3sjCNpAhQtQCssgKC2SLAePaaZfJXVTmQwag=="/>
+		</item>
+	</channel>
+</rss>

@@ -1,0 +1,28 @@
+{
+  "name": "scummvm",
+  "version-string": "latest",
+  "dependencies": [
+    "curl",
+    "discord-rpc",
+    "faad2",
+    "fluidsynth",
+    "freetype",
+    "fribidi",
+    "giflib",
+    "libflac",
+    "libjpeg-turbo",
+    "libmad",
+    "libmikmod",
+    "libopenmpt",
+    "libmpeg2",
+    "libogg",
+    "libpng",
+    "libtheora",
+    "libvorbis",
+    "libvpx",
+    "sdl2",
+    "sdl2-net",
+    "zlib"
+  ],
+  "builtin-baseline": "15e5f3820f0370f1ba7150853762cec0688cd396"
+}

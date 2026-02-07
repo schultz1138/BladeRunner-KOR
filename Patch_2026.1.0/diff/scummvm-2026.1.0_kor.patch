@@ -1,0 +1,1050 @@
+diff --git a/engines/bladerunner/bladerunner.cpp b/engines/bladerunner/bladerunner.cpp
+index de2d2816..886d989f 100644
+--- a/engines/bladerunner/bladerunner.cpp
++++ b/engines/bladerunner/bladerunner.cpp
+@@ -86,6 +86,7 @@
+ #include "common/system.h"
+ #include "common/debug.h"
+ #include "common/debug-channels.h"
++#include "common/str.h"
+ #include "common/translation.h"
+ #include "common/compression/unzip.h"
+ 
+@@ -95,6 +96,7 @@
+ #include "engines/advancedDetector.h"
+ 
+ #include "graphics/thumbnail.h"
++#include "graphics/fonts/ttf.h"
+ 
+ namespace BladeRunner {
+ 
+@@ -794,7 +796,30 @@ bool BladeRunnerEngine::startup(bool hasSavegames) {
+ 
+ 		_scores = new Scores(this);
+ 
+-		_mainFont = Font::load(this, "KIA6PT.FON", 1, false);
++		_mainFont = nullptr;
++#if defined(USE_FREETYPE2)
++		// TTF 로드: Kor_font.ttf (릴리즈 고정)
++		if (Common::File::exists("Kor_font.ttf") || isArchiveOpen("SUBTITLES.MIX")) {
++			Common::SeekableReadStream *ttfStream = getResourceStream("Kor_font.ttf");
++			if (ttfStream) {
++				int fontSize = 9;
++				if (ConfMan.hasKey("ko_font_size"))
++					fontSize = ConfMan.getInt("ko_font_size");
++				if (fontSize < 6)
++					fontSize = 6;
++				else if (fontSize > 32)
++					fontSize = 32;
++
++				_mainFont = Graphics::loadTTFFont(ttfStream, DisposeAfterUse::YES, fontSize);
++				if (!_mainFont) {
++					delete ttfStream;
++				}
++			}
++		}
++#endif
++		if (!_mainFont) {
++			_mainFont = Font::load(this, "KIA6PT.FON", 1, false);
++		}
+ 
+ 		_shapes = new Shapes(this);
+ 		_shapes->load("SHAPES.SHP");
+@@ -2548,6 +2573,17 @@ Common::SeekableReadStream *BladeRunnerEngine::getResourceStream(const Common::S
+ 	return nullptr;
+ }
+ 
++int BladeRunnerEngine::getStringWidthUTF8(const Common::String &text) const {
++	Common::U32String u32 = Common::convertUtf8ToUtf32(text.c_str());
++	return _mainFont->getStringWidth(u32);
++}
++
++void BladeRunnerEngine::drawStringUTF8(Graphics::Surface *dst, const Common::String &text, int x, int y, int w, uint32 color,
++                                       Graphics::TextAlign align, int deltax, bool useEllipsis) const {
++	Common::U32String u32 = Common::convertUtf8ToUtf32(text.c_str());
++	_mainFont->drawString(dst, u32, x, y, w, color, align, deltax, useEllipsis);
++}
++
+ bool BladeRunnerEngine::playerHasControl() {
+ 	return _playerLosesControlCounter == 0;
+ }
+
+diff --git a/engines/bladerunner/bladerunner.h b/engines/bladerunner/bladerunner.h
+index c744a326..15cb77ca 100644
+--- a/engines/bladerunner/bladerunner.h
++++ b/engines/bladerunner/bladerunner.h
+@@ -33,6 +33,7 @@
+ #include "engines/engine.h"
+ 
+ #include "graphics/surface.h"
++#include "graphics/font.h"
+ 
+ #include "math/cosinetables.h"
+ #include "math/sinetables.h"
+@@ -167,7 +168,7 @@ public:
+ 	Items              *_items;
+ 	KIA                *_kia;
+ 	Lights             *_lights;
+-	Font               *_mainFont;
++	Graphics::Font     *_mainFont;
+ 	Subtitles          *_subtitles;
+ 	Mouse              *_mouse;
+ 	Music              *_music;
+@@ -428,6 +429,9 @@ public:
+ 	void setSubtitlesEnabled(bool newVal);
+ 
+ 	Common::SeekableReadStream *getResourceStream(const Common::String &name);
++	int getStringWidthUTF8(const Common::String &text) const;
++	void drawStringUTF8(Graphics::Surface *dst, const Common::String &text, int x, int y, int w, uint32 color,
++	                    Graphics::TextAlign align, int deltax = 0, bool useEllipsis = false) const;
+ 
+ 	bool playerHasControl();
+ 	void playerLosesControl();
+
+diff --git a/engines/bladerunner/dialogue_menu.cpp b/engines/bladerunner/dialogue_menu.cpp
+index 85a1ed46..69a98fa0 100644
+--- a/engines/bladerunner/dialogue_menu.cpp
++++ b/engines/bladerunner/dialogue_menu.cpp
+@@ -329,6 +329,15 @@ void DialogueMenu::draw(Graphics::Surface &s) {
+ 		return;
+ 	}
+ 
++	const bool useLegacyByteEncoding = (_vm->_language == Common::RU_RUS && _vm->_russianCP1251);
++	auto drawText = [&](const Common::String &text, int x, int y, uint32 color) {
++		if (useLegacyByteEncoding) {
++			_vm->_mainFont->drawString(&s, text, x, y, s.w, color);
++		} else {
++			_vm->drawStringUTF8(&s, text, x, y, s.w, color, Graphics::kTextAlignLeft);
++		}
++	};
++
+ 	int fadeInItemIndex = _fadeInItemIndex;
+ 	if (fadeInItemIndex < listSize()) {
+ 		++_fadeInItemIndex;
+@@ -385,7 +394,7 @@ void DialogueMenu::draw(Graphics::Surface &s) {
+ 		_shapes->get(1)->draw(s, x1, y);
+ 		_shapes->get(4)->draw(s, x2, y);
+ 		uint32 color = s.format.RGBToColor((_items[i].colorIntensity / 2) * (256 / 32), (_items[i].colorIntensity / 2) * (256 / 32), _items[i].colorIntensity * (256 / 32));
+-		_vm->_mainFont->drawString(&s, _items[i].text, x, y, s.w, color);
++		drawText(_items[i].text, x, y, color);
+ 		y += kLineHeight;
+ 	}
+ 	for (; x != x2; ++x) {
+@@ -410,8 +419,13 @@ const char *DialogueMenu::getText(int id) const {
+ 
+ void DialogueMenu::calculatePosition(int unusedX, int unusedY) {
+ 	_maxItemWidth = 0;
++	const bool useLegacyByteEncoding = (_vm->_language == Common::RU_RUS && _vm->_russianCP1251);
++	auto getTextWidth = [&](const Common::String &text) {
++		return useLegacyByteEncoding ? _vm->_mainFont->getStringWidth(text) : _vm->getStringWidthUTF8(text);
++	};
++
+ 	for (int i = 0; i != _listSize; ++i) {
+-		_maxItemWidth = MAX(_maxItemWidth, _vm->_mainFont->getStringWidth(_items[i].text));
++		_maxItemWidth = MAX(_maxItemWidth, getTextWidth(_items[i].text));
+ 	}
+ 	_maxItemWidth += 2;
+ 
+
+diff --git a/engines/bladerunner/subtitles.cpp b/engines/bladerunner/subtitles.cpp
+index 8ee817eb..580732aa 100644
+--- a/engines/bladerunner/subtitles.cpp
++++ b/engines/bladerunner/subtitles.cpp
+@@ -28,6 +28,7 @@
+ #include "bladerunner/time.h"
+ 
+ #include "common/debug.h"
++#include "common/config-manager.h"
+ #include "common/unicode-bidi.h"
+ 
+ #include "graphics/font.h"
+@@ -249,6 +250,18 @@ void Subtitles::init(void) {
+ 		}
+ 	}
+ 
++	// Prefer UTF-8 TTF subtitles when Kor_font.ttf is available.
++#if defined(USE_FREETYPE2)
++	if (_subtitlesInfo.fontType == Subtitles::kSubtitlesFontTypeInternal) {
++		Common::SeekableReadStream *korStream = _vm->getResourceStream("Kor_font.ttf");
++		if (korStream) {
++			delete korStream; // existence check only
++			_subtitlesInfo.fontType = Subtitles::kSubtitlesFontTypeTTF;
++			_subtitlesInfo.fontName = "Kor_font.ttf";
++		}
++	}
++#endif
++
+ 	//
+ 	// Initializing/Loading Subtitles Fonts
+ 	if (_subtitlesInfo.fontType == Subtitles::kSubtitlesFontTypeInternal) {
+@@ -258,8 +271,21 @@ void Subtitles::init(void) {
+ 		_useUTF8 = false;
+ 	} else if (_subtitlesInfo.fontType == Subtitles::kSubtitlesFontTypeTTF) {
+ #if defined(USE_FREETYPE2)
+-		Common::SeekableReadStream *stream = _vm->getResourceStream(_subtitlesInfo.fontName);
+-		_font = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, 18);
++		// TTF 로드: Kor_font.ttf (릴리즈 고정)
++		Common::SeekableReadStream *stream = _vm->getResourceStream("Kor_font.ttf");
++		if (!stream) {
++			warning("Subtitles require a TTF font but none found.");
++			return;
++		}
++		_subtitlesInfo.fontName = "Kor_font.ttf";
++		int fontSize = 18;
++		if (ConfMan.hasKey("ko_sub_font_size"))
++			fontSize = ConfMan.getInt("ko_sub_font_size");
++		if (fontSize < 10)
++			fontSize = 10;
++		else if (fontSize > 36)
++			fontSize = 36;
++		_font = Graphics::loadTTFFont(stream, DisposeAfterUse::YES, fontSize);
+ 		_useUTF8 = true;
+ #else
+ 		warning("Subtitles require a TTF font but this ScummVM build doesn't support it.");
+@@ -580,6 +606,41 @@ void Subtitles::mergeSubtitleQuotes(int actorId, int quoteFirst, int quoteSecond
+  */
+ void Subtitles::draw(Graphics::Surface &s) {
+ 	if (_isSystemActive && _vm->getExtraCNotify() == 3) {
++		const bool useLegacyByteEncoding = (_vm->_language == Common::RU_RUS && _vm->_russianCP1251);
++		auto hasHighBytes = [](const Common::String &value) {
++			for (uint i = 0; i != value.size(); ++i) {
++				if ((uint8)value[i] >= 0x80) {
++					return true;
++				}
++			}
++			return false;
++		};
++		auto getTextWidth = [&](const Common::String &text) {
++			if (useLegacyByteEncoding) {
++				return _vm->_mainFont->getStringWidth(text);
++			}
++			Common::U32String u32 = Common::convertUtf8ToUtf32(text);
++			int u32Width = _vm->_mainFont->getStringWidth(u32);
++			// Extra C-Notify text resources can still contain legacy byte encodings.
++			// If UTF-8 decoding yields no drawable glyph width, use byte path.
++			if (hasHighBytes(text) && u32Width == 0) {
++				return _vm->_mainFont->getStringWidth(text);
++			}
++			return u32Width;
++		};
++		auto drawText = [&](const Common::String &text, int x, int y, uint32 color) {
++			if (useLegacyByteEncoding) {
++				_vm->_mainFont->drawString(&s, text, x, y, s.w, color);
++			} else {
++				Common::U32String u32 = Common::convertUtf8ToUtf32(text);
++				if (hasHighBytes(text) && _vm->_mainFont->getStringWidth(u32) == 0) {
++					_vm->_mainFont->drawString(&s, text, x, y, s.w, color);
++				} else {
++					_vm->_mainFont->drawString(&s, u32, x, y, s.w, color);
++				}
++			}
++		};
++
+ 		// Timing fixed for 60Hz by ScummVM team
+ 		uint32 timeNow = _vm->_time->currentSystem();
+ 		bool updateTimeout = false;
+@@ -589,7 +650,7 @@ void Subtitles::draw(Graphics::Surface &s) {
+ 			_xcTimeLast = timeNow;
+ 		}
+ 
+-		_vm->_mainFont->drawString(&s, _excTitlStr, 313 - _vm->_mainFont->getStringWidth(_excTitlStr) / 2, 143, s.w, s.format.RGBToColor(240, 232, 192));
++		drawText(_excTitlStr, 313 - getTextWidth(_excTitlStr) / 2, 143, s.format.RGBToColor(240, 232, 192));
+ 
+ 		int y = 158;
+ 		int lineTextWidth;
+@@ -600,7 +661,7 @@ void Subtitles::draw(Graphics::Surface &s) {
+ 				} else {
+ 					_xcLineTexts[i] = _xcStrings[_xcStringIndex];
+ 					_xcLineTimeouts[i] = 63;
+-					lineTextWidth = _vm->_mainFont->getStringWidth(_xcLineTexts[i]);
++					lineTextWidth = getTextWidth(_xcLineTexts[i]);
+ 					_xcLineOffsets[i] = _vm->_rnd.getRandomNumberRng(0, (306 -  lineTextWidth) > 0 ? (306 - lineTextWidth) : 0) + 155;
+ 
+ 					_xcStringIndex = (_xcStringIndex + 1) % kxcStringCount;
+@@ -613,7 +674,7 @@ void Subtitles::draw(Graphics::Surface &s) {
+ 					colorIndex = 63 - colorIndex;
+ 				}
+ 				colorIndex /= 2;
+-				_vm->_mainFont->drawString(&s, _xcLineTexts[i], _xcLineOffsets[i], y, s.w, s.format.RGBToColor(kTextColors[colorIndex].r, kTextColors[colorIndex].g, kTextColors[colorIndex].b));
++				drawText(_xcLineTexts[i], _xcLineOffsets[i], y, s.format.RGBToColor(kTextColors[colorIndex].r, kTextColors[colorIndex].g, kTextColors[colorIndex].b));
+ 			}
+ 			y += 10;
+ 		}
+
+diff --git a/engines/bladerunner/ui/end_credits.cpp b/engines/bladerunner/ui/end_credits.cpp
+index 180a3460..096deae2 100644
+--- a/engines/bladerunner/ui/end_credits.cpp
++++ b/engines/bladerunner/ui/end_credits.cpp
+@@ -21,6 +21,7 @@
+ 
+ #include "common/system.h"
+ #include "common/rect.h"
++#include "common/str.h"
+ 
+ #include "audio/mixer.h"
+ 
+@@ -196,6 +197,38 @@ void EndCredits::show() {
+ 	int textStrWidth = 0;
+ 	const int bigToSmallTextYPosDiff = ((fontBig->getFontHeight() - fontSmall->getFontHeight()) / 2);
+ 	const int smallestMarginXToCreditName = 6; // px
++	const bool useLegacyByteEncoding = (_vm->_language == Common::RU_RUS && _vm->_russianCP1251);
++	auto hasHighBytes = [](const Common::String &value) {
++		for (uint i = 0; i != value.size(); ++i) {
++			if ((uint8)value[i] >= 0x80) {
++				return true;
++			}
++		}
++		return false;
++	};
++	auto getTextWidth = [&](const Font *font, const Common::String &text) {
++		if (useLegacyByteEncoding) {
++			return font->getStringWidth(text);
++		}
++		Common::U32String u32 = Common::convertUtf8ToUtf32(text);
++		int u32Width = font->getStringWidth(u32);
++		if (hasHighBytes(text) && u32Width == 0) {
++			return font->getStringWidth(text);
++		}
++		return u32Width;
++	};
++	auto drawText = [&](const Font *font, const Common::String &text, int x, int yPos, uint32 color) {
++		if (useLegacyByteEncoding) {
++			font->drawString(&_vm->_surfaceFront, text, x, yPos, _vm->_surfaceFront.w, color);
++		} else {
++			Common::U32String u32 = Common::convertUtf8ToUtf32(text);
++			if (hasHighBytes(text) && font->getStringWidth(u32) == 0) {
++				font->drawString(&_vm->_surfaceFront, text, x, yPos, _vm->_surfaceFront.w, color);
++			} else {
++				font->drawString(&_vm->_surfaceFront, u32, x, yPos, _vm->_surfaceFront.w, color);
++			}
++		}
++	};
+ 
+ 	for (int i = 0; i < textCount; ++i) {
+ 		Common::String s = textResource->getText(i);
+@@ -221,7 +254,7 @@ void EndCredits::show() {
+ 			    && i == 277) {
+ 				y +=  2 * fontSmall->getFontHeight();
+ 			}
+-			textStrWidth = fontSmall->getStringWidth(s);
++			textStrWidth = getTextWidth(fontSmall, s);
+ 			textXPositions[i] = 270 - textStrWidth;
+ 			//
+ 			// Check here if horizontal alignment of this credit "title"
+@@ -292,7 +325,7 @@ void EndCredits::show() {
+ 			y = textYPositions[i] - (int)position;
+ 
+ 			if (y < 452 && y + height > fontBig->getFontHeight()) {
+-				font->drawString(&_vm->_surfaceFront, s, textXPositions[i], y, _vm->_surfaceFront.w, 0);
++				drawText(font, s, textXPositions[i], y, 0);
+ 			}
+ 		}
+ 
+
+diff --git a/engines/bladerunner/ui/esper.cpp b/engines/bladerunner/ui/esper.cpp
+index d3fae00a..5828477f 100644
+--- a/engines/bladerunner/ui/esper.cpp
++++ b/engines/bladerunner/ui/esper.cpp
+@@ -1038,9 +1038,18 @@ void ESPER::drawTextCoords(Graphics::Surface &surface) {
+ 			ew = "uh %04d";
+ 		}
+ 	}
+-	_vm->_mainFont->drawString(&surface, Common::String::format(zm, _zoom / _zoomMin * 2.0f  ), 155, 364, surface.w, surface.format.RGBToColor(0, 0, 255));
+-	_vm->_mainFont->drawString(&surface, Common::String::format(ns, 12 * _viewport.top  +  98), 260, 364, surface.w, surface.format.RGBToColor(0, 0, 255));
+-	_vm->_mainFont->drawString(&surface, Common::String::format(ew, 12 * _viewport.left + 167), 364, 364, surface.w, surface.format.RGBToColor(0, 0, 255));
++	const bool useLegacyByteEncoding = (_vm->_language == Common::RU_RUS && _vm->_russianCP1251);
++	auto drawText = [&](const Common::String &text, int x, int y, uint32 color) {
++		if (useLegacyByteEncoding) {
++			_vm->_mainFont->drawString(&surface, text, x, y, surface.w, color);
++		} else {
++			_vm->drawStringUTF8(&surface, text, x, y, surface.w, color, Graphics::kTextAlignLeft);
++		}
++	};
++
++	drawText(Common::String::format(zm, _zoom / _zoomMin * 2.0f), 155, 364, surface.format.RGBToColor(0, 0, 255));
++	drawText(Common::String::format(ns, 12 * _viewport.top + 98), 260, 364, surface.format.RGBToColor(0, 0, 255));
++	drawText(Common::String::format(ew, 12 * _viewport.left + 167), 364, 364, surface.format.RGBToColor(0, 0, 255));
+ }
+ 
+ void ESPER::drawMouse(Graphics::Surface &surface) {
+
+diff --git a/engines/bladerunner/ui/kia.cpp b/engines/bladerunner/ui/kia.cpp
+index 85451e80..2a47a602 100644
+--- a/engines/bladerunner/ui/kia.cpp
++++ b/engines/bladerunner/ui/kia.cpp
+@@ -327,9 +327,19 @@ void KIA::tick() {
+ 		_shapes->get(40)->draw(_vm->_surfaceFront, 0, 0);
+ 		_shapes->get(41)->draw(_vm->_surfaceFront, 211, 447);
+ 	}
++
++	const bool useLegacyByteEncoding = (_vm->_language == Common::RU_RUS && _vm->_russianCP1251);
++	auto drawText = [&](const Common::String &text, int x, int y, uint32 color) {
++		if (useLegacyByteEncoding) {
++			_vm->_mainFont->drawString(&_vm->_surfaceFront, text, x, y, _vm->_surfaceFront.w, color);
++		} else {
++			_vm->drawStringUTF8(&_vm->_surfaceFront, text, x, y, _vm->_surfaceFront.w, color, Graphics::kTextAlignLeft);
++		}
++	};
++
+ 	if (_currentSectionId != kKIASectionQuit && _transitionId != 14) {
+ 		if (_vm->_settings->getDifficulty() > kGameDifficultyEasy) {
+-			_vm->_mainFont->drawString(&_vm->_surfaceFront, Common::String::format("%04d", _vm->_gameVars[kVariableChinyen]), 580, 341, _vm->_surfaceFront.w, _vm->_surfaceFront.format.RGBToColor(80, 96, 136));
++			drawText(Common::String::format("%04d", _vm->_gameVars[kVariableChinyen]), 580, 341, _vm->_surfaceFront.format.RGBToColor(80, 96, 136));
+ 		} else {
+ 			_shapes->get(39)->draw(_vm->_surfaceFront, 583, 342);
+ 		}
+@@ -390,7 +400,7 @@ void KIA::tick() {
+ 			_shapes->get(47)->draw(_vm->_surfaceFront, 182, 446);
+ 		}
+ 	}
+-	_vm->_mainFont->drawString(&_vm->_surfaceFront, "1.00", 438, 471, _vm->_surfaceFront.w, _vm->_surfaceFront.format.RGBToColor(56, 56, 56)); // 1.01 is DVD version, but only cd handling routines were changed, no game logic
++	drawText("1.00", 438, 471, _vm->_surfaceFront.format.RGBToColor(56, 56, 56)); // 1.01 is DVD version, but only cd handling routines were changed, no game logic
+ 	if (!_transitionId) {
+ 		_buttons->drawTooltip(_vm->_surfaceFront, mouse.x, mouse.y);
+ 	}
+
+diff --git a/engines/bladerunner/ui/kia_section_clues.cpp b/engines/bladerunner/ui/kia_section_clues.cpp
+index 0a11997b..0c9498f8 100644
+--- a/engines/bladerunner/ui/kia_section_clues.cpp
++++ b/engines/bladerunner/ui/kia_section_clues.cpp
+@@ -117,12 +117,21 @@ void KIASectionClues::close() {
+ }
+ 
+ void KIASectionClues::draw(Graphics::Surface &surface) {
++	const bool useLegacyByteEncoding = (_vm->_language == Common::RU_RUS && _vm->_russianCP1251);
++	auto drawText = [&](const Common::String &text, int x, int y, uint32 color) {
++		if (useLegacyByteEncoding) {
++			_vm->_mainFont->drawString(&surface, text, x, y, surface.w, color);
++		} else {
++			_vm->drawStringUTF8(&surface, text, x, y, surface.w, color, Graphics::kTextAlignLeft);
++		}
++	};
++
+ 	_uiContainer->draw(surface);
+ 
+-	_vm->_mainFont->drawString(&surface, _vm->_textKIA->getText(0), 300, 162, surface.w, surface.format.RGBToColor(232, 240, 255));
+-	_vm->_mainFont->drawString(&surface, _vm->_textKIA->getText(2), 440, 426, surface.w, surface.format.RGBToColor(80, 96, 136));
+-	_vm->_mainFont->drawString(&surface, _vm->_textKIA->getText(1), 440, 442, surface.w, surface.format.RGBToColor(80, 96, 136));
+-	_vm->_mainFont->drawString(&surface, _vm->_textKIA->getText(4), 440, 458, surface.w, surface.format.RGBToColor(80, 96, 136));
++	drawText(_vm->_textKIA->getText(0), 300, 162, surface.format.RGBToColor(232, 240, 255));
++	drawText(_vm->_textKIA->getText(2), 440, 426, surface.format.RGBToColor(80, 96, 136));
++	drawText(_vm->_textKIA->getText(1), 440, 442, surface.format.RGBToColor(80, 96, 136));
++	drawText(_vm->_textKIA->getText(4), 440, 458, surface.format.RGBToColor(80, 96, 136));
+ 
+ 	int clueId = _cluesScrollBox->getSelectedLineData();
+ 	if (clueId != -1) {
+@@ -134,7 +143,7 @@ void KIASectionClues::draw(Graphics::Surface &surface) {
+ 		} else {
+ 			text.clear();
+ 		}
+-		_vm->_mainFont->drawString(&surface, text, 490, 426, surface.w, surface.format.RGBToColor(136, 168, 255));
++		drawText(text, 490, 426, surface.format.RGBToColor(136, 168, 255));
+ 
+ 		int crimeId = _vm->_crimesDatabase->getCrime(clueId);
+ 		if (crimeId != -1) {
+@@ -142,7 +151,7 @@ void KIASectionClues::draw(Graphics::Surface &surface) {
+ 		} else {
+ 			text.clear();
+ 		}
+-		_vm->_mainFont->drawString(&surface, text, 490, 442, surface.w, surface.format.RGBToColor(136, 168, 255));
++		drawText(text, 490, 442, surface.format.RGBToColor(136, 168, 255));
+ 
+ 		int assetType = _vm->_crimesDatabase->getAssetType(clueId);
+ 		if (assetType != kClueTypeIntangible) {
+@@ -150,17 +159,17 @@ void KIASectionClues::draw(Graphics::Surface &surface) {
+ 		} else {
+ 			text.clear();
+ 		}
+-		_vm->_mainFont->drawString(&surface, text, 490, 458, surface.w, surface.format.RGBToColor(136, 168, 255));
++		drawText(text, 490, 458, surface.format.RGBToColor(136, 168, 255));
+ 	}
+ 
+ 	_buttons->draw(surface);
+ 	_buttons->drawTooltip(surface, _mouseX, _mouseY);
+ 
+ 	if (_debugNop) {
+-		_vm->_mainFont->drawString(&surface, Common::String::format("Debug display: %s", _vm->_textActorNames->getText(_debugNop)), 120, 132, surface.w, surface.format.RGBToColor(255, 255, 0));
++		drawText(Common::String::format("Debug display: %s", _vm->_textActorNames->getText(_debugNop)), 120, 132, surface.format.RGBToColor(255, 255, 0));
+ 	}
+ 	if (_debugIntangible) {
+-		_vm->_mainFont->drawString(&surface, "Debug Mode: Showing intangible clues.", 220, 105, surface.w, surface.format.RGBToColor(255, 255, 0));
++		drawText("Debug Mode: Showing intangible clues.", 220, 105, surface.format.RGBToColor(255, 255, 0));
+ 	}
+ }
+ 
+
+diff --git a/engines/bladerunner/ui/kia_section_crimes.cpp b/engines/bladerunner/ui/kia_section_crimes.cpp
+index 74a0491c..613f29f6 100644
+--- a/engines/bladerunner/ui/kia_section_crimes.cpp
++++ b/engines/bladerunner/ui/kia_section_crimes.cpp
+@@ -132,6 +132,18 @@ void KIASectionCrimes::close() {
+ }
+ 
+ void KIASectionCrimes::draw(Graphics::Surface &surface) {
++	const bool useLegacyByteEncoding = (_vm->_language == Common::RU_RUS && _vm->_russianCP1251);
++	auto getTextWidth = [&](const Common::String &value) {
++		return useLegacyByteEncoding ? _vm->_mainFont->getStringWidth(value) : _vm->getStringWidthUTF8(value);
++	};
++	auto drawText = [&](const Common::String &value, int x, int y, uint32 color) {
++		if (useLegacyByteEncoding) {
++			_vm->_mainFont->drawString(&surface, value, x, y, surface.w, color);
++		} else {
++			_vm->drawStringUTF8(&surface, value, x, y, surface.w, color, Graphics::kTextAlignLeft);
++		}
++	};
++
+ 	const char *text = nullptr;
+ 	if (_suspectPhotoShapeId != -1) {
+ 		const Shape *shape = _suspectPhotoShapes->get(_suspectPhotoShapeId);
+@@ -139,7 +151,7 @@ void KIASectionCrimes::draw(Graphics::Surface &surface) {
+ 	}
+ 	if (_suspectPhotoShapeId == 14 || _suspectPhotoShapeId == 13) {
+ 		text = _vm->_textKIA->getText(49);
+-		_vm->_mainFont->drawString(&surface, text, 201 - _vm->_mainFont->getStringWidth(text) / 2, 218, surface.w, surface.format.RGBToColor(255, 255, 255));
++		drawText(text, 201 - getTextWidth(text) / 2, 218, surface.format.RGBToColor(255, 255, 255));
+ 	}
+ 
+ 	surface.fillRect(Common::Rect(120, 134, 250, 145), 0);
+@@ -155,7 +167,7 @@ void KIASectionCrimes::draw(Graphics::Surface &surface) {
+ 		text = _vm->_textCrimes->getText(_crimeSelected);
+ 	}
+ 
+-	_vm->_mainFont->drawString(&surface, text, 185 - _vm->_mainFont->getStringWidth(text) / 2, 136, surface.w, surface.format.RGBToColor(136, 168, 255));
++	drawText(text, 185 - getTextWidth(text) / 2, 136, surface.format.RGBToColor(136, 168, 255));
+ 
+ 	surface.fillRect(Common::Rect(136, 304, 266, 315), 0);
+ 	surface.hLine(136, 303, 266, surface.format.RGBToColor(48, 40, 40));
+@@ -179,7 +191,7 @@ void KIASectionCrimes::draw(Graphics::Surface &surface) {
+ 			text = generatedText.c_str();
+ 		}
+ 	}
+-	_vm->_mainFont->drawString(&surface, text, 201 - _vm->_mainFont->getStringWidth(text) / 2, 306, surface.w, surface.format.RGBToColor(136, 168, 255));
++	drawText(text, 201 - getTextWidth(text) / 2, 306, surface.format.RGBToColor(136, 168, 255));
+ 
+ 	_uiContainer->draw(surface);
+ 	_buttons->draw(surface);
+
+diff --git a/engines/bladerunner/ui/kia_section_diagnostic.cpp b/engines/bladerunner/ui/kia_section_diagnostic.cpp
+index 0377a57f..88926627 100644
+--- a/engines/bladerunner/ui/kia_section_diagnostic.cpp
++++ b/engines/bladerunner/ui/kia_section_diagnostic.cpp
+@@ -70,6 +70,18 @@ void KIASectionDiagnostic::close() {
+ }
+ 
+ void KIASectionDiagnostic::draw(Graphics::Surface &surface) {
++	const bool useLegacyByteEncoding = (_vm->_language == Common::RU_RUS && _vm->_russianCP1251);
++	auto getTextWidth = [&](const Common::String &text) {
++		return useLegacyByteEncoding ? _vm->_mainFont->getStringWidth(text) : _vm->getStringWidthUTF8(text);
++	};
++	auto drawText = [&](const Common::String &text, int x, int y, uint32 color) {
++		if (useLegacyByteEncoding) {
++			_vm->_mainFont->drawString(&surface, text, x, y, surface.w, color);
++		} else {
++			_vm->drawStringUTF8(&surface, text, x, y, surface.w, color, Graphics::kTextAlignLeft);
++		}
++	};
++
+ 	uint32 timeNow = _vm->_time->currentSystem();
+ 
+ 	for (int i = 0; i < _text->getCount(); ++i) {
+@@ -84,7 +96,7 @@ void KIASectionDiagnostic::draw(Graphics::Surface &surface) {
+ 
+ 			const char *text = _text->getText(i);
+ 			if (text) {
+-				_vm->_mainFont->drawString(&surface, text, 320 - _vm->_mainFont->getStringWidth(text) / 2, y, surface.w, surface.format.RGBToColor(kTextColors[colorIndex].r, kTextColors[colorIndex].g, kTextColors[colorIndex].b));
++				drawText(text, 320 - getTextWidth(text) / 2, y, surface.format.RGBToColor(kTextColors[colorIndex].r, kTextColors[colorIndex].g, kTextColors[colorIndex].b));
+ 			}
+ 		}
+ 	}
+
+diff --git a/engines/bladerunner/ui/kia_section_pogo.cpp b/engines/bladerunner/ui/kia_section_pogo.cpp
+index 6ea705c1..23741eec 100644
+--- a/engines/bladerunner/ui/kia_section_pogo.cpp
++++ b/engines/bladerunner/ui/kia_section_pogo.cpp
+@@ -249,6 +249,18 @@ void KIASectionPogo::open() {
+ }
+ 
+ void KIASectionPogo::draw(Graphics::Surface &surface) {
++	const bool useLegacyByteEncoding = (_vm->_language == Common::RU_RUS && _vm->_russianCP1251);
++	auto getTextWidth = [&](const Common::String &text) {
++		return useLegacyByteEncoding ? _vm->_mainFont->getStringWidth(text) : _vm->getStringWidthUTF8(text);
++	};
++	auto drawText = [&](const Common::String &text, int x, int y, uint32 color) {
++		if (useLegacyByteEncoding) {
++			_vm->_mainFont->drawString(&surface, text, x, y, surface.w, color);
++		} else {
++			_vm->drawStringUTF8(&surface, text, x, y, surface.w, color, Graphics::kTextAlignLeft);
++		}
++	};
++
+ 	// Timing fixed for 60Hz by ScummVM team
+ 	uint32 timeNow = _vm->_time->currentSystem();
+ 	bool updateTimeout = false;
+@@ -259,7 +271,7 @@ void KIASectionPogo::draw(Graphics::Surface &surface) {
+ 	}
+ 
+ 	const char *title = "We 3 coders give special thanks to:";
+-	_vm->_mainFont->drawString(&surface, title, 313 - _vm->_mainFont->getStringWidth(title) / 2, 143, surface.w, surface.format.RGBToColor(240, 232, 192));
++	drawText(title, 313 - getTextWidth(title) / 2, 143, surface.format.RGBToColor(240, 232, 192));
+ 
+ 	int y = 158;
+ 	int lineTextWidth;
+@@ -270,7 +282,7 @@ void KIASectionPogo::draw(Graphics::Surface &surface) {
+ 			} else {
+ 				_lineTexts[i] = _strings[_stringIndex];
+ 				_lineTimeouts[i] = 63;
+-				 lineTextWidth = _vm->_mainFont->getStringWidth(_lineTexts[i]);
++				lineTextWidth = getTextWidth(_lineTexts[i]);
+ 				_lineOffsets[i] = _vm->_rnd.getRandomNumberRng(0, (306 -  lineTextWidth) > 0 ? (306 - lineTextWidth) : 0) + 155;
+ 
+ 				_stringIndex = (_stringIndex + 1) % kStringCount;
+@@ -283,7 +295,7 @@ void KIASectionPogo::draw(Graphics::Surface &surface) {
+ 				colorIndex = 63 - colorIndex;
+ 			}
+ 			colorIndex /= 2;
+-			_vm->_mainFont->drawString(&surface, _lineTexts[i], _lineOffsets[i], y, surface.w, surface.format.RGBToColor(kTextColors[colorIndex].r, kTextColors[colorIndex].g, kTextColors[colorIndex].b));
++			drawText(_lineTexts[i], _lineOffsets[i], y, surface.format.RGBToColor(kTextColors[colorIndex].r, kTextColors[colorIndex].g, kTextColors[colorIndex].b));
+ 		}
+ 		y += 10;
+ 	}
+
+diff --git a/engines/bladerunner/ui/kia_section_save.cpp b/engines/bladerunner/ui/kia_section_save.cpp
+index 3962a495..a5910a58 100644
+--- a/engines/bladerunner/ui/kia_section_save.cpp
++++ b/engines/bladerunner/ui/kia_section_save.cpp
+@@ -147,41 +147,53 @@ void KIASectionSave::close() {
+ }
+ 
+ void KIASectionSave::draw(Graphics::Surface &surface) {
++	const bool useLegacyByteEncoding = (_vm->_language == Common::RU_RUS && _vm->_russianCP1251);
++	auto getTextWidth = [&](const Common::String &text) {
++		return useLegacyByteEncoding ? _vm->_mainFont->getStringWidth(text) : _vm->getStringWidthUTF8(text);
++	};
++	auto drawText = [&](const Common::String &text, int x, int y, uint32 color) {
++		if (useLegacyByteEncoding) {
++			_vm->_mainFont->drawString(&surface, text, x, y, surface.w, color);
++		} else {
++			_vm->drawStringUTF8(&surface, text, x, y, surface.w, color, Graphics::kTextAlignLeft);
++		}
++	};
++
+ 	_vm->_kia->_shapes->get(69)->draw(surface, 501, 123);
+ 	_buttons->draw(surface);
+ 
+ 	if (_state == kStateNormal) {
+ 		const char *textChooseSlot = _vm->_textOptions->getText(24); // Choose a slot ...
+-		int textChooseSlotWidth = _vm->_mainFont->getStringWidth(textChooseSlot);
+-		_vm->_mainFont->drawString(&surface, textChooseSlot, 308 - textChooseSlotWidth / 2, 143, surface.w, surface.format.RGBToColor(240, 232, 192));
++		int textChooseSlotWidth = getTextWidth(textChooseSlot);
++		drawText(textChooseSlot, 308 - textChooseSlotWidth / 2, 143, surface.format.RGBToColor(240, 232, 192));
+ 
+ 		// Original game shows warnings/error here, but we don't have any
+ 
+ 		const char *textTypeName = _vm->_textOptions->getText(25); // Type a name ...
+-		int textTypeNameWidth = _vm->_mainFont->getStringWidth(textTypeName);
+-		_vm->_mainFont->drawString(&surface, textTypeName, 308 - textTypeNameWidth / 2, 352, surface.w, surface.format.RGBToColor(240, 232, 192));
++		int textTypeNameWidth = getTextWidth(textTypeName);
++		drawText(textTypeName, 308 - textTypeNameWidth / 2, 352, surface.format.RGBToColor(240, 232, 192));
+ 
+ 		_uiContainer->draw(surface);
+ 	} else if (_state == kStateOverwrite) {
+ 		surface.fillRect(Common::Rect(155, 230, 462, 239), surface.format.RGBToColor(80, 56, 32));
+ 
+ 		const Common::String &saveName = _saveList[_selectedLineId].getDescription();
+-		int saveNameWidth = _vm->_mainFont->getStringWidth(saveName);
+-		_vm->_mainFont->drawString(&surface, saveName, 308 - saveNameWidth / 2, 230, surface.w, surface.format.RGBToColor(232, 208, 136));
++		int saveNameWidth = getTextWidth(saveName);
++		drawText(saveName, 308 - saveNameWidth / 2, 230, surface.format.RGBToColor(232, 208, 136));
+ 
+ 		const char *textOverwrite = _vm->_textOptions->getText(35); // Overwrite previously saved game?
+-		int textOverwriteWidth = _vm->_mainFont->getStringWidth(textOverwrite);
+-		_vm->_mainFont->drawString(&surface, textOverwrite, 308 - textOverwriteWidth / 2, 240, surface.w, surface.format.RGBToColor(240, 232, 192));
++		int textOverwriteWidth = getTextWidth(textOverwrite);
++		drawText(textOverwrite, 308 - textOverwriteWidth / 2, 240, surface.format.RGBToColor(240, 232, 192));
+ 	} else if (_state == kStateDelete) {
+ 		surface.fillRect(Common::Rect(155, 230, 462, 239), surface.format.RGBToColor(80, 56, 32));
+ 
+ 		const Common::String &saveName = _saveList[_selectedLineId].getDescription();
+-		int saveNameWidth = _vm->_mainFont->getStringWidth(saveName); // Delete this game?
+-		_vm->_mainFont->drawString(&surface, saveName, 308 - saveNameWidth / 2, 230, surface.w, surface.format.RGBToColor(232, 208, 136));
++		int saveNameWidth = getTextWidth(saveName); // Delete this game?
++		drawText(saveName, 308 - saveNameWidth / 2, 230, surface.format.RGBToColor(232, 208, 136));
+ 
+ 		const char *textDelete = _vm->_textOptions->getText(40);
+-		int textDeleteWidth = _vm->_mainFont->getStringWidth(textDelete);
+-		_vm->_mainFont->drawString(&surface, textDelete, 308 - textDeleteWidth / 2, 240, surface.w, surface.format.RGBToColor(240, 232, 192));
++		int textDeleteWidth = getTextWidth(textDelete);
++		drawText(textDelete, 308 - textDeleteWidth / 2, 240, surface.format.RGBToColor(240, 232, 192));
+ 	}
+ 
+ 	int selectedLineId = _scrollBox->getSelectedLineData();
+
+diff --git a/engines/bladerunner/ui/kia_section_settings.cpp b/engines/bladerunner/ui/kia_section_settings.cpp
+index cb92ceb8..9dc6f21d 100644
+--- a/engines/bladerunner/ui/kia_section_settings.cpp
++++ b/engines/bladerunner/ui/kia_section_settings.cpp
+@@ -239,44 +239,56 @@ void KIASectionSettings::draw(Graphics::Surface &surface) {
+ 	const char *textLight = _vm->_textOptions->getText(15);
+ #endif
+ 
+-	int posConversationChoices = 320 - _vm->_mainFont->getStringWidth(textConversationChoices) / 2;
+-	int posMusic = 320 - _vm->_mainFont->getStringWidth(textMusic) / 2;
+-	int posSoundEffects = 320 - _vm->_mainFont->getStringWidth(textSoundEffects) / 2;
+-	int posAmbientSound = 320 - _vm->_mainFont->getStringWidth(textAmbientSound) / 2;
+-	int posSpeech = 320 - _vm->_mainFont->getStringWidth(textSpeech) / 2;
+-	int posSoft = 178 - _vm->_mainFont->getStringWidth(textSoft);
++	const bool useLegacyByteEncoding = (_vm->_language == Common::RU_RUS && _vm->_russianCP1251);
++	auto getTextWidth = [&](const Common::String &text) {
++		return useLegacyByteEncoding ? _vm->_mainFont->getStringWidth(text) : _vm->getStringWidthUTF8(text);
++	};
++	auto drawText = [&](const Common::String &text, int x, int y, uint32 color) {
++		if (useLegacyByteEncoding) {
++			_vm->_mainFont->drawString(&surface, text, x, y, surface.w, color);
++		} else {
++			_vm->drawStringUTF8(&surface, text, x, y, surface.w, color, Graphics::kTextAlignLeft);
++		}
++	};
++
++	int posConversationChoices = 320 - getTextWidth(textConversationChoices) / 2;
++	int posMusic = 320 - getTextWidth(textMusic) / 2;
++	int posSoundEffects = 320 - getTextWidth(textSoundEffects) / 2;
++	int posAmbientSound = 320 - getTextWidth(textAmbientSound) / 2;
++	int posSpeech = 320 - getTextWidth(textSpeech) / 2;
++	int posSoft = 178 - getTextWidth(textSoft);
+ #if BLADERUNNER_ORIGINAL_SETTINGS
+-	int posGammaCorrection = 320 - _vm->_mainFont->getStringWidth(textGammaCorrection) / 2;
+-	int posDark = 178 - _vm->_mainFont->getStringWidth(textDark);
++	int posGammaCorrection = 320 - getTextWidth(textGammaCorrection) / 2;
++	int posDark = 178 - getTextWidth(textDark);
+ #endif
+ 
+ 	_playerAgendaSelector->draw(surface);
+ 
+-	_vm->_mainFont->drawString(&surface, textConversationChoices, posConversationChoices, 280, surface.w, surface.format.RGBToColor(232, 208, 136));
++	drawText(textConversationChoices, posConversationChoices, 280, surface.format.RGBToColor(232, 208, 136));
+ 
+-	_vm->_mainFont->drawString(&surface, textMusic, posMusic, 150, surface.w, surface.format.RGBToColor(232, 208, 136));
+-	_vm->_mainFont->drawString(&surface, textSoft, posSoft, 161, surface.w, surface.format.RGBToColor(216, 184, 112));
+-	_vm->_mainFont->drawString(&surface, textLoud, 462, 161, surface.w, surface.format.RGBToColor(216, 184, 112));
++	drawText(textMusic, posMusic, 150, surface.format.RGBToColor(232, 208, 136));
++	drawText(textSoft, posSoft, 161, surface.format.RGBToColor(216, 184, 112));
++	drawText(textLoud, 462, 161, surface.format.RGBToColor(216, 184, 112));
+ 
+-	_vm->_mainFont->drawString(&surface, textSoundEffects, posSoundEffects, 175, surface.w, surface.format.RGBToColor(232, 208, 136));
+-	_vm->_mainFont->drawString(&surface, textSoft, posSoft, 186, surface.w, surface.format.RGBToColor(216, 184, 112));
+-	_vm->_mainFont->drawString(&surface, textLoud, 462, 186, surface.w, surface.format.RGBToColor(216, 184, 112));
++	drawText(textSoundEffects, posSoundEffects, 175, surface.format.RGBToColor(232, 208, 136));
++	drawText(textSoft, posSoft, 186, surface.format.RGBToColor(216, 184, 112));
++	drawText(textLoud, 462, 186, surface.format.RGBToColor(216, 184, 112));
+ 
+-	_vm->_mainFont->drawString(&surface, textAmbientSound, posAmbientSound, 200, surface.w, surface.format.RGBToColor(232, 208, 136));
+-	_vm->_mainFont->drawString(&surface, textSoft, posSoft, 211, surface.w, surface.format.RGBToColor(216, 184, 112));
+-	_vm->_mainFont->drawString(&surface, textLoud, 462, 211, surface.w, surface.format.RGBToColor(216, 184, 112));
++	drawText(textAmbientSound, posAmbientSound, 200, surface.format.RGBToColor(232, 208, 136));
++	drawText(textSoft, posSoft, 211, surface.format.RGBToColor(216, 184, 112));
++	drawText(textLoud, 462, 211, surface.format.RGBToColor(216, 184, 112));
+ 
+-	_vm->_mainFont->drawString(&surface, textSpeech, posSpeech, 225, surface.w, surface.format.RGBToColor(232, 208, 136));
+-	_vm->_mainFont->drawString(&surface, textSoft, posSoft, 236, surface.w, surface.format.RGBToColor(216, 184, 112));
+-	_vm->_mainFont->drawString(&surface, textLoud, 462, 236, surface.w, surface.format.RGBToColor(216, 184, 112));
++	drawText(textSpeech, posSpeech, 225, surface.format.RGBToColor(232, 208, 136));
++	drawText(textSoft, posSoft, 236, surface.format.RGBToColor(216, 184, 112));
++	drawText(textLoud, 462, 236, surface.format.RGBToColor(216, 184, 112));
+ 
+ #if BLADERUNNER_ORIGINAL_SETTINGS
+-	_vm->_mainFont->drawString(&surface, textGammaCorrection, posGammaCorrection, 250, surface.w, surface.format.RGBToColor(232, 208, 136));
+-	_vm->_mainFont->drawString(&surface, textDark, posDark, 261, surface.w, surface.format.RGBToColor(216, 184, 112));
+-	_vm->_mainFont->drawString(&surface, textLight, 462, 261, surface.w, surface.format.RGBToColor(216, 184, 112));
++	drawText(textGammaCorrection, posGammaCorrection, 250, surface.format.RGBToColor(232, 208, 136));
++	drawText(textDark, posDark, 261, surface.format.RGBToColor(216, 184, 112));
++	drawText(textLight, 462, 261, surface.format.RGBToColor(216, 184, 112));
+ #endif
+ 
+-	_vm->_mainFont->drawString(&surface, textDesignersCut, 192, 365, surface.w, surface.format.RGBToColor(232, 208, 136));
++	drawText(textDesignersCut, 192, 365, surface.format.RGBToColor(232, 208, 136));
+ 
+ 	if (_vm->_subtitles->isSystemActive()) {
+ 		// Allow this to be loading as an extra text item in the resource for text options
+@@ -325,10 +337,10 @@ void KIASectionSettings::draw(Graphics::Surface &surface) {
+ 
+ 		if (_vm->_language == Common::RU_RUS) {
+ 			// special case for Russian version, put the option in a new line to avoid overlap
+-			_vm->_mainFont->drawString(&surface, textSubtitles, 288, 376, surface.w, surface.format.RGBToColor(232, 208, 136));
++			drawText(textSubtitles, 288, 376, surface.format.RGBToColor(232, 208, 136));
+ 		} else {
+ 			// moved further to the right to avoid overlap with 'Designer's Cut' in some language versions (ESP)
+-			_vm->_mainFont->drawString(&surface, textSubtitles, 323, 365, surface.w, surface.format.RGBToColor(232, 208, 136));
++			drawText(textSubtitles, 323, 365, surface.format.RGBToColor(232, 208, 136));
+ 		}
+ 
+ 		// Vertical Align with "Soft" label
+
+diff --git a/engines/bladerunner/ui/kia_section_suspects.cpp b/engines/bladerunner/ui/kia_section_suspects.cpp
+index 59710540..bca6448e 100644
+--- a/engines/bladerunner/ui/kia_section_suspects.cpp
++++ b/engines/bladerunner/ui/kia_section_suspects.cpp
+@@ -166,13 +166,25 @@ void KIASectionSuspects::close() {
+ }
+ 
+ void KIASectionSuspects::draw(Graphics::Surface &surface) {
++	const bool useLegacyByteEncoding = (_vm->_language == Common::RU_RUS && _vm->_russianCP1251);
++	auto getTextWidth = [&](const Common::String &value) {
++		return useLegacyByteEncoding ? _vm->_mainFont->getStringWidth(value) : _vm->getStringWidthUTF8(value);
++	};
++	auto drawText = [&](const Common::String &value, int x, int y, uint32 color) {
++		if (useLegacyByteEncoding) {
++			_vm->_mainFont->drawString(&surface, value, x, y, surface.w, color);
++		} else {
++			_vm->drawStringUTF8(&surface, value, x, y, surface.w, color, Graphics::kTextAlignLeft);
++		}
++	};
++
+ 	const char *text = nullptr;
+ 	if (_suspectPhotoShapeId != -1) {
+ 		_suspectPhotoShapes->get(_suspectPhotoShapeId)->draw(surface, 142, 150);
+ 	}
+ 	if (_suspectPhotoShapeId == 14 || _suspectPhotoShapeId == 13) {
+ 		text = _vm->_textKIA->getText(49);
+-		_vm->_mainFont->drawString(&surface, text, 190 - _vm->_mainFont->getStringWidth(text) / 2, 201, surface.w, surface.format.RGBToColor(255, 255, 255));
++		drawText(text, 190 - getTextWidth(text) / 2, 201, surface.format.RGBToColor(255, 255, 255));
+ 	}
+ 
+ 	_whereaboutsCheckBox->setChecked(_whereaboutsFilter);
+@@ -183,14 +195,14 @@ void KIASectionSuspects::draw(Graphics::Surface &surface) {
+ 
+ 	_uiContainer->draw(surface);
+ 
+-	_vm->_mainFont->drawString(&surface, _vm->_textKIA->getText(0),  300, 162, surface.w, surface.format.RGBToColor(232, 240, 248));
+-	_vm->_mainFont->drawString(&surface, _vm->_textKIA->getText(46), 142, 248, surface.w, surface.format.RGBToColor(232, 240, 248));
+-	_vm->_mainFont->drawString(&surface, _vm->_textKIA->getText(47), 142, 308, surface.w, surface.format.RGBToColor(232, 240, 248));
+-	_vm->_mainFont->drawString(&surface, _vm->_textKIA->getText(14), 154, 319, surface.w, surface.format.RGBToColor(72, 104, 152));
+-	_vm->_mainFont->drawString(&surface, _vm->_textKIA->getText(15), 154, 329, surface.w, surface.format.RGBToColor(96, 120, 184));
+-	_vm->_mainFont->drawString(&surface, _vm->_textKIA->getText(16), 154, 339, surface.w, surface.format.RGBToColor(112, 144, 216));
+-	_vm->_mainFont->drawString(&surface, _vm->_textKIA->getText(17), 154, 349, surface.w, surface.format.RGBToColor(96, 120, 184));
+-	_vm->_mainFont->drawString(&surface, _vm->_textKIA->getText(48), 154, 359, surface.w, surface.format.RGBToColor(72, 104, 152));
++	drawText(_vm->_textKIA->getText(0), 300, 162, surface.format.RGBToColor(232, 240, 248));
++	drawText(_vm->_textKIA->getText(46), 142, 248, surface.format.RGBToColor(232, 240, 248));
++	drawText(_vm->_textKIA->getText(47), 142, 308, surface.format.RGBToColor(232, 240, 248));
++	drawText(_vm->_textKIA->getText(14), 154, 319, surface.format.RGBToColor(72, 104, 152));
++	drawText(_vm->_textKIA->getText(15), 154, 329, surface.format.RGBToColor(96, 120, 184));
++	drawText(_vm->_textKIA->getText(16), 154, 339, surface.format.RGBToColor(112, 144, 216));
++	drawText(_vm->_textKIA->getText(17), 154, 349, surface.format.RGBToColor(96, 120, 184));
++	drawText(_vm->_textKIA->getText(48), 154, 359, surface.format.RGBToColor(72, 104, 152));
+ 
+ 
+ 	surface.fillRect(Common::Rect(120, 134, 250, 145), 0);
+@@ -216,7 +228,7 @@ void KIASectionSuspects::draw(Graphics::Surface &surface) {
+ 		}
+ 	}
+ 
+-	_vm->_mainFont->drawString(&surface, text, 185 - _vm->_mainFont->getStringWidth(text) / 2, 136, surface.w, surface.format.RGBToColor(136, 168, 248));
++	drawText(text, 185 - getTextWidth(text) / 2, 136, surface.format.RGBToColor(136, 168, 248));
+ 
+ 	_buttons->draw(surface);
+ 	_buttons->drawTooltip(surface, _mouseX, _mouseY);
+
+diff --git a/engines/bladerunner/ui/scores.cpp b/engines/bladerunner/ui/scores.cpp
+index 674a54f6..66b6abfd 100644
+--- a/engines/bladerunner/ui/scores.cpp
++++ b/engines/bladerunner/ui/scores.cpp
+@@ -30,6 +30,7 @@
+ #include "bladerunner/vqa_player.h"
+ 
+ #include "common/keyboard.h"
++#include "common/str.h"
+ 
+ namespace BladeRunner {
+ 
+@@ -143,20 +144,44 @@ void Scores::tick() {
+ 	_vm->_surfaceFront.hLine(200, 139, 400, _vm->_surfaceFront.format.RGBToColor(0, 248, 0));
+ 	_vm->_surfaceFront.hLine(200, 347, 400, _vm->_surfaceFront.format.RGBToColor(0, 0, 248));
+ 
+-	_font->drawString(&_vm->_surfaceFront, _txtScorers->getText(7), 200, 114, _vm->_surfaceFront.w, 0);
++	const bool useLegacyByteEncoding = (_vm->_language == Common::RU_RUS && _vm->_russianCP1251);
++	auto hasHighBytes = [](const Common::String &value) {
++		for (uint i = 0; i != value.size(); ++i) {
++			if ((uint8)value[i] >= 0x80) {
++				return true;
++			}
++		}
++		return false;
++	};
++	auto drawText = [&](const Common::String &text, int x, int y, uint32 color) {
++		if (useLegacyByteEncoding) {
++			_font->drawString(&_vm->_surfaceFront, text, x, y, _vm->_surfaceFront.w, color);
++		} else {
++			Common::U32String u32 = Common::convertUtf8ToUtf32(text);
++			// Some localized text resources still use legacy byte encodings.
++			// If UTF-8 decoding yields no drawable glyph width, fall back to byte rendering.
++			if (hasHighBytes(text) && _font->getStringWidth(u32) == 0) {
++				_font->drawString(&_vm->_surfaceFront, text, x, y, _vm->_surfaceFront.w, color);
++			} else {
++				_font->drawString(&_vm->_surfaceFront, u32, x, y, _vm->_surfaceFront.w, color);
++			}
++		}
++	};
++
++	drawText(_txtScorers->getText(7), 200, 114, 0);
+ 
+ 	int y = 140;
+ 
+ 	for (int i = 0; i < 7; ++i) {
+-		_font->drawString(&_vm->_surfaceFront, _txtScorers->getText(_scorers[i]), 220, y, _vm->_surfaceFront.w, 0);
+-		_font->drawString(&_vm->_surfaceFront, Common::String::format("%d", _scores[_scorers[i]]), 360, y, _vm->_surfaceFront.w, 0);
++		drawText(_txtScorers->getText(_scorers[i]), 220, y, 0);
++		drawText(Common::String::format("%d", _scores[_scorers[i]]), 360, y, 0);
+ 
+ 		y += 26;
+ 	}
+ 
+-	_font->drawString(&_vm->_surfaceFront, _txtScorers->getText(8), 200, 322, _vm->_surfaceFront.w, 0);
+-	_font->drawString(&_vm->_surfaceFront, _txtScorers->getText(_lastScoreId), 220, 348, _vm->_surfaceFront.w, 0);
+-	_font->drawString(&_vm->_surfaceFront, Common::String::format("%d", _lastScoreValue), 360, 348, _vm->_surfaceFront.w, 0);
++	drawText(_txtScorers->getText(8), 200, 322, 0);
++	drawText(_txtScorers->getText(_lastScoreId), 220, 348, 0);
++	drawText(Common::String::format("%d", _lastScoreValue), 360, 348, 0);
+ 
+ 	_vm->blitToScreen(_vm->_surfaceFront);
+ }
+
+diff --git a/engines/bladerunner/ui/ui_dropdown.cpp b/engines/bladerunner/ui/ui_dropdown.cpp
+index 7b9ed4a7..37375710 100644
+--- a/engines/bladerunner/ui/ui_dropdown.cpp
++++ b/engines/bladerunner/ui/ui_dropdown.cpp
+@@ -124,14 +124,24 @@ void UIDropDown::draw(Graphics::Surface &surface) {
+ 		return;
+ 	}
+ 
+-	int posStartOfSelectedLineDesc = _controlLeftX + _vm->_mainFont->getStringWidth(_labelStr) + _vm->_mainFont->getCharWidth(' ');
+-	_vm->_mainFont->drawString(&surface, _labelStr, _controlLeftX, _lineSelectorFrameRect.top, surface.w, surface.format.RGBToColor(232, 208, 136));
+-	_vm->_mainFont->drawString(&surface, _lineSelectedStr,
+-		                        posStartOfSelectedLineDesc,
+-		                        _lineSelectorFrameRect.top, surface.w, surface.format.RGBToColor(240, 232, 192));
++	const bool useLegacyByteEncoding = (_vm->_language == Common::RU_RUS && _vm->_russianCP1251);
++	auto getTextWidth = [&](const Common::String &text) {
++		return useLegacyByteEncoding ? _vm->_mainFont->getStringWidth(text) : _vm->getStringWidthUTF8(text);
++	};
++	auto drawText = [&](const Common::String &text, int x, int y, uint32 color) {
++		if (useLegacyByteEncoding) {
++			_vm->_mainFont->drawString(&surface, text, x, y, surface.w, color);
++		} else {
++			_vm->drawStringUTF8(&surface, text, x, y, surface.w, color, Graphics::kTextAlignLeft);
++		}
++	};
++
++	int posStartOfSelectedLineDesc = _controlLeftX + getTextWidth(_labelStr) + _vm->_mainFont->getCharWidth(' ');
++	drawText(_labelStr, _controlLeftX, _lineSelectorFrameRect.top, surface.format.RGBToColor(232, 208, 136));
++	drawText(_lineSelectedStr, posStartOfSelectedLineDesc, _lineSelectorFrameRect.top, surface.format.RGBToColor(240, 232, 192));
+ 
+ 	// TODO add a clipping for description field here
+-	int posEndOfSelectedLineDesc = posStartOfSelectedLineDesc + _vm->_mainFont->getStringWidth(_lineSelectedStr) + _vm->_mainFont->getCharWidth(' ');
++	int posEndOfSelectedLineDesc = posStartOfSelectedLineDesc + getTextWidth(_lineSelectedStr) + _vm->_mainFont->getCharWidth(' ');
+ 
+ 	_lineDropdownBtn->setImageLeft(0, posEndOfSelectedLineDesc );
+ 
+@@ -193,12 +203,16 @@ void UIDropDown::clearLines() {
+ 
+ void UIDropDown::addLine(const Common::String &text, int lineData) {
+ 	_lineSelectorScrollBox->addLine(text, lineData, 0x08);
+-	_lineSelectorScrollBoxMaxLineWidth = MAX(_vm->_mainFont->getStringWidth(text), _lineSelectorScrollBoxMaxLineWidth);
++	const bool useLegacyByteEncoding = (_vm->_language == Common::RU_RUS && _vm->_russianCP1251);
++	int textWidth = useLegacyByteEncoding ? _vm->_mainFont->getStringWidth(text) : _vm->getStringWidthUTF8(text);
++	_lineSelectorScrollBoxMaxLineWidth = MAX(textWidth, _lineSelectorScrollBoxMaxLineWidth);
+ }
+ 
+ void UIDropDown::addLine(const char *text, int lineData) {
+ 	_lineSelectorScrollBox->addLine(text, lineData, 0x08);
+-	_lineSelectorScrollBoxMaxLineWidth = MAX(_vm->_mainFont->getStringWidth(text), _lineSelectorScrollBoxMaxLineWidth);
++	const bool useLegacyByteEncoding = (_vm->_language == Common::RU_RUS && _vm->_russianCP1251);
++	int textWidth = useLegacyByteEncoding ? _vm->_mainFont->getStringWidth(text) : _vm->getStringWidthUTF8(text);
++	_lineSelectorScrollBoxMaxLineWidth = MAX(textWidth, _lineSelectorScrollBoxMaxLineWidth);
+ }
+ 
+ void UIDropDown::sortLines() {
+
+diff --git a/engines/bladerunner/ui/ui_image_picker.cpp b/engines/bladerunner/ui/ui_image_picker.cpp
+index bd6c4a8e..38ca5271 100644
+--- a/engines/bladerunner/ui/ui_image_picker.cpp
++++ b/engines/bladerunner/ui/ui_image_picker.cpp
+@@ -255,7 +255,13 @@ void UIImagePicker::draw(Graphics::Surface &surface) {
+ 
+ 		if (_vm->_debugger->_viewUI) {
+ 			surface.frameRect(img.rect, surface.format.RGBToColor(255, 255, 255));
+-			_vm->_mainFont->drawString(&surface, Common::String::format("%d", i), (img.rect.left + img.rect.right) / 2, (img.rect.top + img.rect.bottom) / 2, surface.w, surface.format.RGBToColor(255, 255, 255));
++			const bool useLegacyByteEncoding = (_vm->_language == Common::RU_RUS && _vm->_russianCP1251);
++			Common::String text = Common::String::format("%d", i);
++			if (useLegacyByteEncoding) {
++				_vm->_mainFont->drawString(&surface, text, (img.rect.left + img.rect.right) / 2, (img.rect.top + img.rect.bottom) / 2, surface.w, surface.format.RGBToColor(255, 255, 255));
++			} else {
++				_vm->drawStringUTF8(&surface, text, (img.rect.left + img.rect.right) / 2, (img.rect.top + img.rect.bottom) / 2, surface.w, surface.format.RGBToColor(255, 255, 255), Graphics::kTextAlignLeft);
++			}
+ 		}
+ 	}
+ }
+@@ -280,7 +286,19 @@ void UIImagePicker::drawTooltip(Graphics::Surface &surface, int x, int y) {
+ 		return;
+ 	}
+ 
+-	int width = _vm->_mainFont->getStringWidth(tooltip) + 1;
++	const bool useLegacyByteEncoding = (_vm->_language == Common::RU_RUS && _vm->_russianCP1251);
++	auto getTextWidth = [&](const Common::String &text) {
++		return useLegacyByteEncoding ? _vm->_mainFont->getStringWidth(text) : _vm->getStringWidthUTF8(text);
++	};
++	auto drawText = [&](const Common::String &text, int xPos, int yPos, uint32 color) {
++		if (useLegacyByteEncoding) {
++			_vm->_mainFont->drawString(&surface, text, xPos, yPos, surface.w, color);
++		} else {
++			_vm->drawStringUTF8(&surface, text, xPos, yPos, surface.w, color, Graphics::kTextAlignLeft);
++		}
++	};
++
++	int width = getTextWidth(tooltip) + 1;
+ 	int height = _vm->_mainFont->getFontHeight() + 1;
+ 
+ 	Common::Rect rect;
+@@ -312,7 +330,7 @@ void UIImagePicker::drawTooltip(Graphics::Surface &surface, int x, int y) {
+ 
+ 	surface.fillRect(rect, surface.format.RGBToColor(0, 0, 0));
+ 	surface.frameRect(rect, surface.format.RGBToColor(255, 255, 255));
+-	_vm->_mainFont->drawString(&surface, tooltip, rect.left + 2, rect.top, surface.w, surface.format.RGBToColor(255, 255, 255));
++	drawText(tooltip, rect.left + 2, rect.top, surface.format.RGBToColor(255, 255, 255));
+ }
+ 
+ bool UIImagePicker::handleMouseAction(int x, int y, bool down, bool up, bool ignore) {
+
+diff --git a/engines/bladerunner/ui/ui_scroll_box.cpp b/engines/bladerunner/ui/ui_scroll_box.cpp
+index f9df69c9..323dea0d 100644
+--- a/engines/bladerunner/ui/ui_scroll_box.cpp
++++ b/engines/bladerunner/ui/ui_scroll_box.cpp
+@@ -447,6 +447,18 @@ void UIScrollBox::draw(Graphics::Surface &surface) {
+ 		return;
+ 	}
+ 
++	const bool useLegacyByteEncoding = (_vm->_language == Common::RU_RUS && _vm->_russianCP1251);
++	auto getTextWidth = [&](const Common::String &text) {
++		return useLegacyByteEncoding ? _vm->_mainFont->getStringWidth(text) : _vm->getStringWidthUTF8(text);
++	};
++	auto drawText = [&](const Common::String &text, int x, int y, uint32 color) {
++		if (useLegacyByteEncoding) {
++			_vm->_mainFont->drawString(&surface, text, x, y, surface.w, color);
++		} else {
++			_vm->drawStringUTF8(&surface, text, x, y, surface.w, color, Graphics::kTextAlignLeft);
++		}
++	};
++
+ 	uint32 timeNow = _vm->_time->currentSystem();
+ 
+ 	// update scrolling
+@@ -630,10 +642,10 @@ void UIScrollBox::draw(Graphics::Surface &surface) {
+ 			}
+ 
+ 			if (_center) {
+-				x = _rect.left + (_rect.width() - _vm->_mainFont->getStringWidth(_lines[i]->text)) / 2;
++				x = _rect.left + (_rect.width() - getTextWidth(_lines[i]->text)) / 2;
+ 			}
+ 
+-			_vm->_mainFont->drawString(&surface, _lines[i]->text, x, y, surface.w, color);
++			drawText(_lines[i]->text, x, y, color);
+ 
+ 			y1 += kLineHeight;
+ 			y2 += kLineHeight;

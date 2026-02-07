@@ -1,0 +1,15 @@
+# Build outputs
+/build_br/
+
+# Release/package outputs
+/Release_Kor_Subs_v1.0/
+
+# Build logs
+**/msbuild_br.log
+
+# Local-only dependencies (if present under this folder)
+/ThirdParty/
+
+# Source tree build artifacts
+/ScummVM_BR_2026.1.0/dists/msvc_br/Releasex64/
+/ScummVM_BR_2026.1.0/plugin.exp
