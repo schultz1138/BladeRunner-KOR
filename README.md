@@ -56,6 +56,7 @@ BladeRunner_Kor_v1.0.zip
 │  COPYING.txt          - ScummVM 라이선스 안내  
 │  FONT_LICENSE.txt   - 나눔스퀘어 폰트 라이선스  
 │  ReadMe.txt            - 사용 방법 안내  
+│  RELEASE_NOTES.md      - 릴리즈 노트    
 │  
 ├─Other_OS  
 │  └─SUBTITLES.MIX       - macOS/Android/Linux 등 타 OS용 한국어 자막  
@@ -64,6 +65,7 @@ BladeRunner_Kor_v1.0.zip
    ├─scummvm.exe          - 커스텀 ScummVM (2026.1.0 기반, Blade Runner 전용)  
    ├─scummvm.ini           - 커스텀 설정 파일  
    ├─*.dll (15개)              - 커스텀 ScummVM 실행용 라이브러리 DLL  
+   ├─RUNTIME_DLL_LIST.txt      - DLL 라이브러리 목록  
    ├─start.exe                 - 게임 실행 (아이콘 적용됨)  
    ├─start.bat                 - 게임 실행 (백신 오진/실행 불가 시 사용)  
    ├─config.exe               - 설정 실행 (아이콘 적용됨)  
