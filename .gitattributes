@@ -1,0 +1,4 @@
+# Normalize text files to LF by default.
+# Keep batch files with literal CRLF bytes in git blobs and archives.
+* text=auto eol=lf
+*.bat -text

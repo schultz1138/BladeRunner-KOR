@@ -1,0 +1,18 @@
+# Runtime DLL list (v1.0)
+# Build source: scummvm-2026.1.0_CLEAN/dists/msvc_br/Releasex64
+
+brotlicommon.dll
+brotlidec.dll
+bz2.dll
+FLAC.dll
+freetype.dll
+fribidi-0.dll
+jpeg62.dll
+libcurl.dll
+libpng16.dll
+ogg.dll
+SDL2.dll
+SDL2_net.dll
+vorbis.dll
+vorbisfile.dll
+zlib1.dll

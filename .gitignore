@@ -2,7 +2,7 @@
 /build_br/
 
 # Release/package outputs
-/Release_Kor_Subs_v1.0/
+/patch/Release_Kor_Subs_v1.0/
 
 # Build logs
 **/msbuild_br.log
@@ -11,5 +11,5 @@
 /ThirdParty/
 
 # Source tree build artifacts
-/ScummVM_BR_2026.1.0/dists/msvc_br/Releasex64/
-/ScummVM_BR_2026.1.0/plugin.exp
+/engine/snapshots/ScummVM_BR_2026.1.0/dists/msvc_br/Releasex64/
+/engine/snapshots/ScummVM_BR_2026.1.0/plugin.exp
