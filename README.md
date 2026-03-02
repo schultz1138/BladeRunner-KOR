@@ -66,10 +66,11 @@ patch/Kor_Subs
 
 ---
 
+
 ## ✅ 설치 방법
 
 ### 방법 A: Windows PC (권장)
-1) `patch\Kor_Subs\PC_Windows` 폴더의 모든 파일을 **게임 폴더** 루트에 복사  
+1) `PC_Windows` 폴더의 안에 있는 모든 파일을 **게임 폴더** 루트에 복사  
 - Steam판(기본 폴더): `C:\Program Files (x86)\Steam\steamapps\common\Blade Runner Enhanced Edition\Classic`
 2) `SUBTITLES.MIX` 덮어쓰기 확인이 나오면 "예" 선택
 3) `install.bat` 실행 후 생성된 `Blade Runner Classic (KOR)` 바로가기로 실행
