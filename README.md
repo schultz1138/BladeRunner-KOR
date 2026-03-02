@@ -4,7 +4,7 @@
 기반: ScummVM 2026.1.0 (커스텀 빌드, Blade Runner 전용)  
 
 Changelog 1.0.1:
-- exe 파일 제거(바이러스 오진 방지)
+- start.exe 파일 제거(바이러스 오진 방지)
 - install.bat 파일 실행 시 바탕화면에 바로가기 생성
 - `scummvm.exe`를 `scummvm-k.exe`로 변경 (`scummvm-k.ini` 별도 관리)
 
