@@ -47,7 +47,7 @@ Nightdive Studios에서 2022년 6월 23일에 출시한 **Blade Runner: Enhanced
 현재 저장소 기준 배포 리소스 루트는 `patch/Kor_Subs` 입니다.
 
 ```text
-patch/Kor_Subs
+/
 ├─README.md
 ├─licenses/
 ├─Other_OS/
