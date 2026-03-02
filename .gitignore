@@ -13,3 +13,7 @@
 # Source tree build artifacts
 /engine/snapshots/ScummVM_BR_2026.1.0/dists/msvc_br/Releasex64/
 /engine/snapshots/ScummVM_BR_2026.1.0/plugin.exp
+
+# Local temp/reference folders
+/.ref/
+/.tmp/
