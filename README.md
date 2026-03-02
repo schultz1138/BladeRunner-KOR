@@ -73,7 +73,7 @@ patch/Kor_Subs
 1) `PC_Windows` 폴더의 안에 있는 모든 파일을 **게임 폴더** 루트에 복사  
 - Steam판(기본 폴더): `C:\Program Files (x86)\Steam\steamapps\common\Blade Runner Enhanced Edition\Classic`
 2) `SUBTITLES.MIX` 덮어쓰기 확인이 나오면 "예" 선택
-3) `install.bat` 실행 후 생성된 `Blade Runner Classic (KOR)` 바로가기로 실행
+3) `install.bat` 실행 후 바탕화면에 생성된 `Blade Runner Classic (KOR)` 바로가기로 실행
 
 ### 방법 B: Android / macOS / Linux / 기존 ScummVM 사용자
 1) `patch\Kor_Subs\Other_OS\SUBTITLES.MIX`를 게임 데이터 폴더에 복사
