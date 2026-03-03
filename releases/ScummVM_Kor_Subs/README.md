@@ -7,15 +7,13 @@ Base: ScummVM 2026.1.0 (Blade Runner focused build)
 
 1. `Other_OS\SUBTITLES.MIX`
 2. `PC_Windows\SUBTITLES.MIX`
-3. `PC_Windows\scummvm-k.exe`
 4. `PC_Windows\scummvm-k.ini`
 5. `PC_Windows\start.bat`
 6. `PC_Windows\install.bat`
 7. `PC_Windows\config.bat`
 8. `PC_Windows\BladeRunner.ico`
 9. `PC_Windows\RUNTIME_DLL_LIST.txt`
-10. `PC_Windows\*.dll` (15 runtime DLLs)
-11. `licenses\`
+11. `Licenses\`
 12. `README.md`
 
 ## Important
