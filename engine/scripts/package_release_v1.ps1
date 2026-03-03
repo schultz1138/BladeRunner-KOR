@@ -1,7 +1,8 @@
 param(
     [string]$BuildRoot = "build_br",
-    [string]$ContentRoot = "patch/Kor_Subs",
-    [string]$ReleaseRoot = "patch/Release_Kor_Subs_v1.0",
+    [string]$ContentRoot = "releases/ScummVM_Kor_Subs",
+    [string]$ReleaseRoot = "",
+    [string]$ReleaseVersion = "1.0.1",
     [string]$SourceRoot = ""
 )
 
@@ -33,7 +34,11 @@ else {
 
 $BuildRoot = Resolve-RepoPath $BuildRoot
 $ContentRoot = Resolve-RepoPath $ContentRoot
-$ReleaseRoot = Resolve-RepoPath $ReleaseRoot
+$ReleaseRoot = if ([string]::IsNullOrWhiteSpace($ReleaseRoot)) {
+    Join-Path $ContentRoot "Release_Kor_Subs"
+} else {
+    Resolve-RepoPath $ReleaseRoot
+}
 $releaseDate = Get-Date -Format "yyyy-MM-dd"
 
 $runtimeDlls = @(
@@ -60,10 +65,17 @@ function Ensure-File([string]$path) {
     }
 }
 
-Ensure-File "$BuildRoot/scummvm.exe"
+if (Test-Path "$BuildRoot/scummvm-k.exe") {
+    $scummvmExe = "$BuildRoot/scummvm-k.exe"
+} elseif (Test-Path "$BuildRoot/scummvm.exe") {
+    $scummvmExe = "$BuildRoot/scummvm.exe"
+} else {
+    throw "Missing required file: $BuildRoot/scummvm-k.exe (or $BuildRoot/scummvm.exe)"
+}
+
 Ensure-File "$ContentRoot/Other_OS/SUBTITLES.MIX"
 Ensure-File "$ContentRoot/PC_Windows/SUBTITLES.MIX"
-Ensure-File "$ContentRoot/PC_Windows/scummvm.ini"
+Ensure-File "$ContentRoot/PC_Windows/scummvm-k.ini"
 Ensure-File "$ContentRoot/PC_Windows/start.bat"
 Ensure-File "$ContentRoot/PC_Windows/install.bat"
 Ensure-File "$ContentRoot/PC_Windows/BladeRunner.ico"
@@ -86,11 +98,11 @@ New-Item -ItemType Directory -Path $releaseWin -Force | Out-Null
 # Core payload
 Copy-Item -Force "$ContentRoot/Other_OS/SUBTITLES.MIX" "$releaseOther/SUBTITLES.MIX"
 Copy-Item -Force "$ContentRoot/PC_Windows/SUBTITLES.MIX" "$releaseWin/SUBTITLES.MIX"
-Copy-Item -Force "$ContentRoot/PC_Windows/scummvm.ini" "$releaseWin/scummvm.ini"
+Copy-Item -Force "$ContentRoot/PC_Windows/scummvm-k.ini" "$releaseWin/scummvm-k.ini"
 Copy-Item -Force "$ContentRoot/PC_Windows/start.bat" "$releaseWin/start.bat"
 Copy-Item -Force "$ContentRoot/PC_Windows/install.bat" "$releaseWin/install.bat"
 Copy-Item -Force "$ContentRoot/PC_Windows/BladeRunner.ico" "$releaseWin/BladeRunner.ico"
-Copy-Item -Force "$BuildRoot/scummvm.exe" "$releaseWin/scummvm.exe"
+Copy-Item -Force $scummvmExe "$releaseWin/scummvm-k.exe"
 
 foreach ($dll in $runtimeDlls) {
     Copy-Item -Force "$BuildRoot/$dll" "$releaseWin/$dll"
@@ -102,7 +114,7 @@ Copy-Item -Force (Join-Path $SourceRoot "LICENSES/COPYING.OFL") "$ReleaseRoot/FO
 
 # Runtime DLL manifest
 $dllManifest = @(
-    "# Runtime DLL list (v1.0)",
+    "# Runtime DLL list (v$ReleaseVersion)",
     "# Build source: $BuildRoot",
     ""
 ) + $runtimeDlls
@@ -110,7 +122,7 @@ $dllManifest = @(
 
 # Release note
 $releaseNote = @(
-    "# BladeRunner Korean Patch v1.0",
+    "# BladeRunner Korean Patch v$ReleaseVersion",
     "",
     "Date: $releaseDate",
     "Base: ScummVM 2026.1.0 (Blade Runner focused build)",
@@ -123,9 +135,9 @@ $releaseNote = @(
     "- UTF-8 UI rendering + legacy-byte fallback fixes",
     "",
     "## Windows payload",
-    "- scummvm.exe",
+    "- scummvm-k.exe",
     "- SUBTITLES.MIX",
-    "- scummvm.ini",
+    "- scummvm-k.ini",
     "- start.bat",
     "- install.bat",
     "- BladeRunner.ico",
@@ -136,7 +148,7 @@ $releaseNote = @(
     "- Enhanced Edition is not supported.",
     "- Source patch: engine/patches/scummvm-2026.1.0_kor.patch"
 )
-[System.IO.File]::WriteAllLines((Join-Path $ReleaseRoot "RELEASE_NOTES_v1.0.md"), $releaseNote)
+[System.IO.File]::WriteAllLines((Join-Path $ReleaseRoot "RELEASE_NOTES_v$ReleaseVersion.md"), $releaseNote)
 
 # SHA256 sums
 $hashLines = New-Object System.Collections.Generic.List[string]

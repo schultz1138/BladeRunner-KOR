@@ -1,8 +1,8 @@
 # Build outputs
 /build_br/
 
-# Release/package outputs
-/patch/Release_Kor_Subs_v1.0/
+# Release/package outputs (exclude generated release snapshots)
+/releases/*/Release_*/
 
 # Build logs
 **/msbuild_br.log

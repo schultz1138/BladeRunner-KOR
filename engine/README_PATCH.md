@@ -1,6 +1,6 @@
 # Blade Runner Korean Patch - Source Patch Guide (v1.0.1)
 
-이 문서는 현행 저장소 구조(`engine/`, `patch/`) 기준으로  
+이 문서는 현행 저장소 구조(`engine/`, `releases/`) 기준으로  
 빌드/패치/패키징 재현 절차를 설명합니다.
 
 ## 기준 폴더 (repo root 기준)
@@ -23,7 +23,7 @@
   - `make_diff.ps1`
   - `package_release_v1.ps1`
 
-5. `patch/Kor_Subs`
+5. `releases/ScummVM_Kor_Subs/`
 - 배포 리소스(자막, ini/bat, 라이선스, Windows 실행 파일 등).
 
 ## 원본 소스 획득(사용자 준비)
@@ -91,20 +91,20 @@ powershell -ExecutionPolicy Bypass -File engine/scripts/make_diff.ps1 `
 ```powershell
 powershell -ExecutionPolicy Bypass -File engine/scripts/package_release_v1.ps1 `
   -BuildRoot build_br `
-  -ContentRoot patch/Kor_Subs `
-  -ReleaseRoot patch/Release_Kor_Subs_v1.0.1 `
+  -ContentRoot releases/ScummVM_Kor_Subs `
+  -ReleaseRoot releases/ScummVM_Kor_Subs/Release_Kor_Subs `
   -SourceRoot engine/snapshots/ScummVM_BR_2026.1.0
 ```
 
 생성 결과:
-1. `patch/Release_Kor_Subs_v1.0.1/PC_Windows`
-2. `patch/Release_Kor_Subs_v1.0.1/Other_OS`
+1. `releases/ScummVM_Kor_Subs/Release_Kor_Subs/PC_Windows`
+2. `releases/ScummVM_Kor_Subs/Release_Kor_Subs/Other_OS`
 3. `SHA256SUMS.txt`, `RUNTIME_DLL_LIST.txt`, 릴리즈 노트
-4. `-ReleaseRoot`를 생략하면 스크립트 기본값은 `patch/Release_Kor_Subs_v1.0` 입니다.
+4. `-ReleaseRoot`를 생략하면 스크립트 기본값은 `releases/ScummVM_Kor_Subs/Release_Kor_Subs` 입니다.
 
 주의:
-1. 현재 `package_release_v1.ps1`은 `PC_Windows/scummvm.ini`, `build_br/scummvm.exe` 기준으로 동작합니다.
-2. `scummvm-k.ini/scummvm-k.exe` 체계를 그대로 유지하려면 스크립트 수정 또는 파일명 정합화가 필요합니다.
+1. 현재 `package_release_v1.ps1`은 `build_br/scummvm-k.exe` 우선(없으면 `build_br/scummvm.exe`) + `releases/ScummVM_Kor_Subs/PC_Windows/scummvm-k.ini` 조합으로 동작합니다.
+2. 런타임 바이너리(`exe`, 15개 DLL)는 GitHub Release 업로드 전용으로 두고 저장소 커밋 대상에서 제외합니다.
 
 ## 자주 막히는 포인트
 
@@ -127,8 +127,9 @@ powershell -ExecutionPolicy Bypass -File engine/scripts/package_release_v1.ps1 `
 1. 재현에 불필요한 빌드 산출물은 저장소에 포함하지 않음.
 2. 대표 제외 항목:
 - `build_br/`
-- `patch/Release_Kor_Subs_v1.0.1/`
+- `releases/ScummVM_Kor_Subs/Release_Kor_Subs/`
 - `engine/snapshots/ScummVM_BR_2026.1.0/dists/msvc_br/Releasex64/`
 - `engine/snapshots/ScummVM_BR_2026.1.0/dists/msvc_br/msbuild_br.log`
 - `engine/snapshots/ScummVM_BR_2026.1.0/plugin.exp`
+
 

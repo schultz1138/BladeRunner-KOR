@@ -19,8 +19,8 @@
 4. `engine/clean/` (선택)
 - 사용자가 별도 준비한 clean 소스 보관 위치 권장.
 
-5. `patch/Kor_Subs/`
-- 최종 배포 리소스(자막, bat/ini, 라이선스, Windows 실행 파일).
+5. `releases/`
+- 최종 배포 템플릿 리소스(자막, bat/ini, 라이선스, Windows 실행 파일).
 
 ## 빠른 시작 (Windows)
 
@@ -38,8 +38,8 @@ engine\scripts\build_msbuild_br.bat C:\path\to\scummvm-2026.1.0_clean
 ```powershell
 powershell -ExecutionPolicy Bypass -File engine/scripts/package_release_v1.ps1 `
   -BuildRoot build_br `
-  -ContentRoot patch/Kor_Subs `
-  -ReleaseRoot patch/Release_Kor_Subs_v1.0.1 `
+  -ContentRoot releases/ScummVM_Kor_Subs `
+  -ReleaseRoot releases/ScummVM_Kor_Subs/Release_Kor_Subs `
   -SourceRoot engine/snapshots/ScummVM_BR_2026.1.0
 ```
 
@@ -62,4 +62,3 @@ powershell -ExecutionPolicy Bypass -File engine/scripts/package_release_v1.ps1 `
 1. 본 패치는 비공식 사용자 제작물입니다.
 2. Enhanced Edition은 지원 대상이 아닙니다.
 3. 저장소에는 게임 원본 데이터가 포함되지 않습니다.
-
