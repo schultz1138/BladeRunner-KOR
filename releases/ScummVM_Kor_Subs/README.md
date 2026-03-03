@@ -13,8 +13,8 @@ Base: ScummVM 2026.1.0 (Blade Runner focused build)
 7. `PC_Windows\config.bat`
 8. `PC_Windows\BladeRunner.ico`
 9. `PC_Windows\RUNTIME_DLL_LIST.txt`
-11. `Licenses\`
-12. `README.md`
+10. `Licenses\`
+11. `README.md`
 
 ## Important
 
