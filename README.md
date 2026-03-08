@@ -44,13 +44,14 @@ Nightdive Studios에서 2022년 6월 23일에 출시한 **Blade Runner: Enhanced
 
 ## 📂 배포 리소스 구조
 
-본 소스로 직접 빌드하실께 아닌 일반 사용자 분께서는 우측의 release에 표시된 BladeRunner_Kor_v1.0.1_20260302.zip 파일을 다운로드 받으시거나, 아래의 주소를 직접 복사/붙여넣기 하여 BladeRunner_Kor_v1.0.1_20260302.zip 파일을 다운로드 받으시면 됩니다.
+일반 사용자 분께서는 우측의 releases에 표시된 BladeRunner_Kor_v1.0.1_20260302.zip 파일을 다운로드 받으시거나, 아래의 주소를 직접 복사/붙여넣기 하여 BladeRunner_Kor_v1.0.1_20260302.zip 파일을 다운로드 받으시면 됩니다.
 
 https://github.com/schultz1138/BladeRunner-KOR/releases/download/1.0.1/BladeRunner_Kor_v1.0.1_20260302.zip
 
 파일 내부 구성은 다음과 같습니다.
 
-```BladeRunner_Kor_v1.0.1_20260302.zip
+```  
+BladeRunner_Kor_v1.0.1_20260302.zip 기준
 ├─README.md
 ├─licenses/
 ├─Other_OS/
